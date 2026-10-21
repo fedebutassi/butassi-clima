@@ -1,5 +1,6 @@
 """Convierte las alertas crudas del SMN (salida de smn_alertas.js) en datos para story_alerta.
-Uso: python3 alertas.py alertas_raw.json AAAA-MM-DD > alertas.json
+Uso: python3 alertas.py alertas_raw.json AAAA-MM-DD [manana] > alertas.json
+Con "manana" solo devuelve las alertas del día siguiente (corrida de la noche).
 Solo genera alertas para HOY y MAÑANA (respecto de la fecha dada) que toquen la zona foco.
 Salida: lista (vacía si no hay nada para publicar).
 """
@@ -130,4 +131,7 @@ if __name__ == "__main__":
     with open(sys.argv[1]) as fh:
         raw = json.load(fh)
     hoy = date.fromisoformat(sys.argv[2])
-    print(json.dumps(procesar(raw, hoy), ensure_ascii=False, indent=1))
+    res = procesar(raw, hoy)
+    if len(sys.argv) > 3 and sys.argv[3] == "manana":
+        res = [a for a in res if a["cuando"] == "mañana"]
+    print(json.dumps(res, ensure_ascii=False, indent=1))
