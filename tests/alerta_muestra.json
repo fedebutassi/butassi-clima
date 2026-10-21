@@ -1,0 +1,19 @@
+{
+ "muestra": true,
+ "dia": "Jueves 22",
+ "nivel": 4,
+ "evento": "Tormentas",
+ "franjas": "tarde y noche",
+ "localidades": "Río Tercero · Oncativo · Oliva · Pilar",
+ "zonas": [
+  {"depto": "Tercero Arriba", "nivel": 4},
+  {"depto": "Río Segundo", "nivel": 3},
+  {"depto": "Calamuchita", "nivel": 3}
+ ],
+ "mapa": {
+  "Tercero Arriba": 4, "Río Segundo": 3, "Río Primero": 3, "Calamuchita": 3,
+  "Santa María": 3, "General San Martín": 4, "Juárez Celman": 3, "Río Cuarto": 3
+ },
+ "descripcion": "Tormentas fuertes con lluvias acumuladas entre 40 y 70 mm. Puede haber ráfagas de más de 80 km/h y caída de granizo.",
+ "emision": "22/10 05:00"
+}

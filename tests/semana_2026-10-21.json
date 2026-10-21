@@ -1,0 +1,71 @@
+{
+ "estacion": "PILAR_OBS",
+ "archivo": "20261021",
+ "dias": [
+  {
+   "fecha": "2026-10-21",
+   "dia": "Miércoles",
+   "dia_corto": "Mié",
+   "num": 21,
+   "min": 11,
+   "max": 27,
+   "mm": 0.0,
+   "lluvia": "Sin lluvia",
+   "franja_lluvia": null,
+   "viento_max": 18,
+   "viento_desde": "norte"
+  },
+  {
+   "fecha": "2026-10-22",
+   "dia": "Jueves",
+   "dia_corto": "Jue",
+   "num": 22,
+   "min": 15,
+   "max": 22,
+   "mm": 2.8,
+   "lluvia": "Lluvias débiles",
+   "franja_lluvia": "tarde",
+   "viento_max": 18,
+   "viento_desde": "noreste"
+  },
+  {
+   "fecha": "2026-10-23",
+   "dia": "Viernes",
+   "dia_corto": "Vie",
+   "num": 23,
+   "min": 15,
+   "max": 21,
+   "mm": 0.3,
+   "lluvia": "Casi sin lluvia",
+   "franja_lluvia": null,
+   "viento_max": 21,
+   "viento_desde": "sur"
+  },
+  {
+   "fecha": "2026-10-24",
+   "dia": "Sábado",
+   "dia_corto": "Sáb",
+   "num": 24,
+   "min": 12,
+   "max": 17,
+   "mm": 0.0,
+   "lluvia": "Sin lluvia",
+   "franja_lluvia": null,
+   "viento_max": 26,
+   "viento_desde": "sur"
+  },
+  {
+   "fecha": "2026-10-25",
+   "dia": "Domingo",
+   "dia_corto": "Dom",
+   "num": 25,
+   "min": 11,
+   "max": 19,
+   "mm": 0.2,
+   "lluvia": "Casi sin lluvia",
+   "franja_lluvia": null,
+   "viento_max": 24,
+   "viento_desde": "sur"
+  }
+ ]
+}
