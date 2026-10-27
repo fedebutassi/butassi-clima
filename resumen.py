@@ -1,4 +1,8 @@
 """Carrusel "La semana en el agro" para el feed de @butassihnos (1080x1350 PNG).
+Sigue el design system de Butassi Hnos.: Verde Campo #1C6617, Verde Cultivo #376B35, Cosecha #F0C031
+(acento, con moderación), texto Verde Profundo #173617, bordes #D9E0D9, foto cálida de campo con
+el lavado verde de marca, tarjetas blancas con borde y sombra verdosos, subrayado dorado.
+
 Uso:
   python3 resumen.py resumen.json salida/resumen
 
@@ -13,43 +17,62 @@ resumen.json (lo arma la tarea del viernes con datos verificados en fuente prima
   "temas": [                                                     (0 a 2)
     {"etiqueta": "Campaña", "dato": "38 %", "dato_texto": "de la soja ya sembrada en Córdoba",
      "titulo": "...", "bajada": "...", "importa": "por qué le importa al productor de la zona (opcional)",
-     "fuente": "Bolsa de Cereales de Córdoba", "fecha": "2026-10-29"}
+     "fuente": "Bolsa de Cereales de Córdoba", "fecha": "2026-10-29",
+     "fondo": "siembra"}                                         (opcional; si falta, sale de la etiqueta)
   ],
   "muestra": false
 }
 Precio faltante: null -> "s/c" (sin cotización). La variación la calcula el script, nunca el JSON.
 Si un texto no entra en la placa, el script falla con el nombre del campo para acortarlo.
+
+Fondos: assets/fondos/<nombre>.jpg|jpeg|png|webp. Nombres que usa el script:
+  campo (tapa y respaldo de todo) · cierre · granos (precios) · siembra · cosecha · puerto ·
+  camiones · pulverizacion
+Si falta un fondo, usa campo.jpg y lo avisa por consola.
 """
+import base64
 import html
+import io
 import json
 import os
 import sys
+import unicodedata
 from datetime import date
 
+from PIL import Image, ImageOps
 from playwright.sync_api import sync_playwright
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
+FONDOS_DIR = os.path.join(AQUI, "assets", "fondos")
 with open(os.path.join(AQUI, "assets", "logo.png"), "rb") as _f:
-    import base64
     LOGO = "data:image/png;base64," + base64.b64encode(_f.read()).decode()
 
 ANCHO, ALTO = 1080, 1350
 DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-SUBE, BAJA, IGUAL = "#7ad686", "#ff7a6b", "#f0c031"
 LIMITES = {"etiqueta": 22, "dato": 12, "dato_texto": 60, "titulo": 80, "bajada": 200, "importa": 150, "fuente": 70}
+
+# Etiqueta del tema -> fondo (sin tildes, en minúscula).
+FONDO_POR_ETIQUETA = {
+    "campana": "siembra", "siembra": "siembra", "cultivos": "siembra",
+    "cosecha": "cosecha",
+    "exportaciones": "puerto", "puertos": "puerto", "embarques": "puerto", "molienda": "puerto",
+    "industria": "puerto",
+    "comercializacion": "camiones", "ventas": "camiones", "logistica": "camiones", "fletes": "camiones",
+    "agroquimicos": "pulverizacion", "insumos": "pulverizacion",
+}
+avisos = []
 
 
 def e(t):
     return html.escape(str(t))
 
 
-def fecha(iso):
-    d = date.fromisoformat(iso)
-    return d
+def sin_tildes(t):
+    return "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").lower().strip()
 
 
 def dia_corto(iso, minus=False):
-    d = fecha(iso)
+    d = date.fromisoformat(iso)
     dia = DIAS[d.weekday()]
     return f"{dia.lower() if minus else dia} {d.day}/{d.month:02d}"
 
@@ -59,88 +82,131 @@ def pesos(n):
 
 
 def variacion(ini, fin):
-    """(texto, color, flecha) o None si falta un precio."""
+    """(texto, clase) o None si falta un precio."""
     if ini is None or fin is None:
         return None
     if fin == ini:
-        return ("0 %", IGUAL, "igual")
+        return ("0 %", "igual")
     pct = (fin - ini) / ini * 100
     signo = "+" if pct > 0 else "−"
     # Un cambio menor a 0,1 % se muestra como 0,1 % para que no parezca "sin cambio".
     txt = f"{signo}{max(abs(pct), 0.1):.1f}".replace(".", ",") + " %"
-    return (txt, SUBE if pct > 0 else BAJA, "sube" if pct > 0 else "baja")
+    return (txt, "sube" if pct > 0 else "baja")
 
 
-def flecha(tipo, color):
+def flecha(tipo):
     if tipo == "igual":
-        return (f'<svg class="fl" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="3.2" rx="1.6" fill="{color}"/>'
-                f'<rect x="4" y="13.8" width="16" height="3.2" rx="1.6" fill="{color}"/></svg>')
+        return ('<svg class="fl" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="3.2" rx="1.6"/>'
+                '<rect x="4" y="13.8" width="16" height="3.2" rx="1.6"/></svg>')
     rot = "" if tipo == "sube" else ' transform="rotate(180 12 12)"'
-    return (f'<svg class="fl" viewBox="0 0 24 24"><path{rot} d="M12 3 L21 14 H15 V21 H9 V14 H3 Z" fill="{color}"/></svg>')
+    return f'<svg class="fl" viewBox="0 0 24 24"><path{rot} d="M12 3 L21 14 H15 V21 H9 V14 H3 Z"/></svg>'
+
+
+_cache = {}
+
+
+def fondo(nombre):
+    """data URI del fondo recortado a 1080x1350; si no existe, campo."""
+    if nombre in _cache:
+        return _cache[nombre]
+    ruta = None
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        r = os.path.join(FONDOS_DIR, f"{nombre}.{ext}")
+        if os.path.exists(r):
+            ruta = r
+            break
+    if ruta is None:
+        if nombre != "campo":
+            avisos.append(f"no hay fondo '{nombre}' en assets/fondos/: usé campo")
+            _cache[nombre] = fondo("campo")
+            return _cache[nombre]
+        sys.exit("falta assets/fondos/campo.jpg (fondo de respaldo)")
+    im = ImageOps.exif_transpose(Image.open(ruta)).convert("RGB")
+    if im.width < ANCHO * 0.6 or im.height < ALTO * 0.6:
+        avisos.append(f"el fondo '{nombre}' es chico ({im.width}x{im.height}): puede verse pixelado")
+    im = ImageOps.fit(im, (ANCHO, ALTO), Image.LANCZOS, centering=(0.5, 0.5))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=84)
+    _cache[nombre] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    return _cache[nombre]
 
 
 CSS = """
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:1080px;height:1350px}
-body{font-family:Inter,"SF Pro Display",system-ui,sans-serif;color:#fff;
-  background:linear-gradient(160deg,#0f2611 0%,#173617 40%,#22512a 75%,#2f6330 100%);
-  -webkit-font-smoothing:antialiased;position:relative;overflow:hidden}
+body{font-family:-apple-system,"SF Pro Display","Segoe UI",Roboto,Inter,system-ui,sans-serif;color:#fff;
+  background:#173617;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden}
+.bg{position:absolute;inset:0;background-size:cover;background-position:center}
+/* lavado verde de marca sobre la foto */
+.ov{position:absolute;inset:0}
+.ov.l-hero{background:linear-gradient(180deg,rgba(23,54,23,.82) 0%,rgba(28,102,23,.45) 50%,rgba(23,54,23,.30) 68%,rgba(23,54,23,.88) 100%)}
+.ov.l-cierre{background:linear-gradient(180deg,rgba(23,54,23,.85) 0%,rgba(23,54,23,.55) 45%,rgba(23,54,23,.80) 70%,rgba(23,54,23,.92) 100%)}
+.ov.l-dato{background:linear-gradient(180deg,rgba(23,54,23,.95) 0%,rgba(23,54,23,.88) 12%,rgba(23,54,23,.90) 50%,rgba(23,54,23,.94) 100%)}
 .wrap{position:absolute;left:80px;right:80px;top:72px}
 .wrap.full{bottom:210px;display:flex;flex-direction:column}
 .abajo{margin-top:auto !important}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
-.logo{background:rgba(255,255,255,.96);border-radius:22px;padding:12px 22px;display:flex;box-shadow:0 10px 30px -10px rgba(0,0,0,.35)}
+.logo{background:rgba(255,255,255,.95);border-radius:20px;padding:12px 22px;display:flex;
+  box-shadow:0 25px 50px -12px rgba(28,102,23,.30)}
 .logo img{height:52px;display:block}
-.cont{font-size:26px;font-weight:600;color:rgba(255,255,255,.6);letter-spacing:.04em}
-.eyebrow{font-size:28px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.72)}
-.rule{width:96px;height:6px;border-radius:9999px;background:#f0c031;margin-top:22px}
-h1{margin-top:26px;font-size:72px;line-height:1.04;font-weight:800;letter-spacing:-.025em}
-h1.xl{font-size:136px;line-height:.96;margin-top:40px}
-.sub{margin-top:26px;font-size:34px;line-height:1.35;color:rgba(255,255,255,.82)}
-.card{margin-top:40px;background:rgba(255,255,255,.085);border:1.5px solid rgba(255,255,255,.13);border-radius:40px;padding:10px 40px}
+.cont{font-size:26px;font-weight:600;color:rgba(255,255,255,.75);letter-spacing:.04em}
+.eyebrow{font-size:26px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.85)}
+.rule{width:96px;height:6px;border-radius:9999px;background:#F0C031;margin-top:22px}
+h1{margin-top:26px;font-size:72px;line-height:1.08;font-weight:700;letter-spacing:-.01em}
+h1.xl{font-size:132px;line-height:1;margin-top:40px}
+.sub{margin-top:26px;font-size:34px;line-height:1.4;color:rgba(255,255,255,.9)}
+/* tarjeta blanca de marca */
+.card{margin-top:40px;background:#fff;color:#173617;border:2px solid #D9E0D9;border-radius:28px;
+  padding:10px 40px;box-shadow:0 20px 25px -5px rgba(28,102,23,.16),0 8px 10px -6px rgba(28,102,23,.10)}
+.card.barra{position:relative;overflow:hidden;padding-top:42px}
+.card.barra:before{content:"";position:absolute;left:0;right:0;top:0;height:10px;
+  background:linear-gradient(135deg,#F0C031,#F4CE5B)}
 .temas{display:flex;flex-wrap:wrap;gap:16px}
-.temas-t{font-size:24px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:18px}
-.pill{padding:14px 26px;border-radius:9999px;border:1.5px solid rgba(255,255,255,.28);font-size:28px;font-weight:600}
-.desliza{position:absolute;right:80px;bottom:72px;font-size:30px;font-weight:700;color:#f0c031;display:flex;gap:12px;align-items:center}
+.temas-t{font-size:24px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:18px}
+.pill{padding:14px 28px;border-radius:9999px;background:rgba(255,255,255,.95);color:#1C6617;font-size:28px;font-weight:600}
+.desliza{position:absolute;right:80px;bottom:72px;font-size:30px;font-weight:700;color:#F0C031;display:flex;gap:12px;align-items:center}
 /* precios */
 .tabla{width:100%;border-collapse:collapse}
-.tabla th{font-size:24px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.55);text-align:right;padding:26px 0 18px}
+.tabla th{font-size:22px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#687068;text-align:right;padding:26px 0 16px}
 .tabla th:first-child{text-align:left}
-.tabla td{padding:24px 0;border-top:1.5px solid rgba(255,255,255,.12);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.tabla td.g{text-align:left;font-size:38px;font-weight:700}
-.tabla td.ini{font-size:30px;color:rgba(255,255,255,.62);padding-right:8px}
-.tabla td.fin{font-size:38px;font-weight:700;padding-left:24px}
-.var{display:inline-flex;align-items:center;justify-content:flex-end;gap:10px;font-size:30px;font-weight:700;min-width:190px}
-.fl{width:34px;height:34px;flex:none}
-.sc{color:rgba(255,255,255,.5);font-weight:500}
-.nota{margin-top:18px;font-size:24px;color:rgba(255,255,255,.6)}
+.tabla td{padding:22px 0;border-top:2px solid #D9E0D9;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabla td.g{text-align:left;font-size:36px;font-weight:700;color:#173617}
+.tabla td.ini{font-size:29px;color:#687068;padding-right:8px}
+.tabla td.fin{font-size:36px;font-weight:700;padding-left:22px;color:#173617}
+.var{display:inline-flex;align-items:center;gap:8px;font-size:27px;font-weight:700;padding:9px 18px 9px 14px;border-radius:9999px}
+.var.sube{background:rgba(28,102,23,.11);color:#1C6617;fill:#1C6617}
+.var.baja{background:rgba(185,28,28,.10);color:#B91C1C;fill:#B91C1C}
+.var.igual{background:#F0C031;color:#173617;fill:#173617}
+.fl{width:28px;height:28px;flex:none}
+.sc{color:#687068;font-weight:500}
+.nota{margin-top:18px;font-size:23px;color:rgba(255,255,255,.8)}
 /* tema */
-.chip{display:inline-block;padding:12px 26px;border-radius:9999px;background:#f0c031;color:#173617;font-size:26px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
-.dato{margin-top:40px;font-size:150px;line-height:.95;font-weight:800;letter-spacing:-.03em;color:#f0c031}
-.dato-t{margin-top:14px;font-size:34px;font-weight:600;color:rgba(255,255,255,.85)}
-.t2{margin-top:44px;font-size:58px;line-height:1.1;font-weight:800;letter-spacing:-.02em}
-.b2{margin-top:24px;font-size:34px;line-height:1.42;color:rgba(255,255,255,.86)}
-.t2.solo{font-size:68px;margin-top:40px}
-.imp{padding:34px 40px}
-.imp-t{font-size:24px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#f0c031}
-.imp-b{margin-top:12px;font-size:32px;line-height:1.4;font-weight:500}
+.chip{display:inline-block;padding:12px 26px;border-radius:9999px;background:#F0C031;color:#173617;font-size:25px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.dato{margin-top:40px;font-size:150px;line-height:.95;font-weight:700;letter-spacing:-.02em;color:#F0C031}
+.dato-t{margin-top:14px;font-size:34px;font-weight:600;color:rgba(255,255,255,.92)}
+.t2{margin-top:44px;font-size:56px;line-height:1.12;font-weight:700;letter-spacing:-.01em}
+.t2.solo{font-size:66px;margin-top:40px}
+.b2{margin-top:24px;font-size:33px;line-height:1.45;color:rgba(255,255,255,.9)}
+.imp{padding-bottom:34px}
+.imp-t{font-size:22px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1C6617}
+.imp-b{margin-top:12px;font-size:31px;line-height:1.42;font-weight:500;color:#173617}
 /* cierre */
-.handle-xl{margin-top:44px;font-size:76px;font-weight:800;letter-spacing:-.02em;color:#f0c031}
-.agenda .fila{display:flex;justify-content:space-between;align-items:baseline;padding:28px 0;border-top:1.5px solid rgba(255,255,255,.12);font-size:36px}
+.handle-xl{font-size:76px;font-weight:700;letter-spacing:-.01em;color:#F0C031;line-height:1.08}
+.agenda .fila{display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-top:2px solid #D9E0D9;font-size:34px}
 .agenda .fila:first-child{border-top:0}
-.agenda .fila b{font-weight:700}
-.agenda .fila span{color:rgba(255,255,255,.7);font-size:32px}
+.agenda .fila b{font-weight:700;color:#173617}
+.agenda .fila span{color:#1C6617;font-size:31px;font-weight:600}
 /* pie */
 .pie{position:absolute;left:80px;right:80px;bottom:64px}
-.fuente{font-size:22px;line-height:1.45;color:rgba(255,255,255,.58);padding-bottom:22px;margin-bottom:22px;border-bottom:1.5px solid rgba(255,255,255,.14)}
+.fuente{font-size:22px;line-height:1.45;color:rgba(255,255,255,.78);padding-bottom:22px;margin-bottom:22px;border-bottom:1.5px solid rgba(255,255,255,.22)}
 .marca{display:flex;align-items:baseline;gap:22px}
 .handle{font-size:28px;font-weight:700}
-.web{font-size:26px;color:rgba(255,255,255,.7)}
-.muestra{padding:10px 22px;border-radius:9999px;background:#d93a2b;font-size:22px;font-weight:800;letter-spacing:.08em}
+.web{font-size:26px;color:rgba(255,255,255,.85)}
+.muestra{padding:10px 22px;border-radius:9999px;background:#B91C1C;font-size:22px;font-weight:700;letter-spacing:.08em}
 """
 
 
-def pagina(n, total, cuerpo, fuente, muestra=False, extra="", full=False, marca=True):
+def pagina(n, total, cuerpo, fuente, fondo_uri, lavado, muestra=False, extra="", full=False, marca=True):
     derecha = ('<div class="muestra">MUESTRA · NO PUBLICAR</div>' if muestra
                else f'<div class="cont">{n}/{total}</div>')
     top = f'<div class="top"><div class="logo"><img src="{LOGO}" alt="Butassi Hermanos"></div>{derecha}</div>'
@@ -149,8 +215,9 @@ def pagina(n, total, cuerpo, fuente, muestra=False, extra="", full=False, marca=
         pie = ('<div class="pie">' + (f'<div class="fuente">{fuente}</div>' if fuente else "")
                + ('<div class="marca"><div class="handle">@butassihnos</div><div class="web">butassihnos.com.ar</div></div>'
                   if marca else "") + '</div>')
-    return (f'<!doctype html><html lang="es"><head><meta charset="utf-8"><style>{CSS}</style></head>'
-            f'<body><div class="wrap{" full" if full else ""}">{top}{cuerpo}</div>{extra}{pie}</body></html>')
+    return (f'<!doctype html><html lang="es"><head><meta charset="utf-8"><style>{CSS}</style></head><body>'
+            f'<div class="bg" style="background-image:url({fondo_uri})"></div><div class="ov l-{lavado}"></div>'
+            f'<div class="wrap{" full" if full else ""}">{top}{cuerpo}</div>{extra}{pie}</body></html>')
 
 
 def placa_tapa(d, total):
@@ -160,9 +227,9 @@ def placa_tapa(d, total):
     return pagina(1, total,
                   f'<div class="eyebrow">Resumen semanal · {e(dia_corto(d["desde"]))} al {e(dia_corto(d["hasta"]))}</div>'
                   f'<div class="rule"></div><h1 class="xl">La semana<br>en el agro</h1>'
-                  f'<div class="sub">Lo que pasó en el mercado y en el campo, contado simple.</div>'
+                  f'<div class="sub">Lo que pasó en el mercado y en el campo,<br>contado simple.</div>'
                   f'<div class="abajo"><div class="temas-t">En este resumen</div><div class="temas">{pills}</div></div>',
-                  "", d.get("muestra", False), extra=desliza, full=True)
+                  "", fondo("campo"), "hero", d.get("muestra", False), extra=desliza, full=True)
 
 
 def placa_precios(d, n, total):
@@ -173,8 +240,7 @@ def placa_precios(d, n, total):
         v = variacion(ini, fin)
         marca = "*" if g.get("estimativo") else ""
         estimativo = estimativo or bool(g.get("estimativo"))
-        var = (f'<span class="var" style="color:{v[1]}">{flecha(v[2], v[1])}{v[0]}</span>' if v
-               else '<span class="var sc">—</span>')
+        var = f'<span class="var {v[1]}">{flecha(v[1])}{v[0]}</span>' if v else '<span class="sc">—</span>'
         filas += (f'<tr><td class="g">{e(g["grano"])}</td>'
                   f'<td class="ini">{pesos(ini) if ini is not None else "<span class=sc>s/c</span>"}</td>'
                   f'<td class="fin">{marca}{pesos(fin) if fin is not None else "<span class=sc>s/c</span>"}</td>'
@@ -192,7 +258,7 @@ def placa_precios(d, n, total):
                   f'<div class="card"><table class="tabla"><tr><th>Grano</th><th>{e(dia_corto(p["fecha_inicio"]))}</th>'
                   f'<th>{e(dia_corto(p["fecha_cierre"]))}</th><th>Variación</th></tr>{filas}</table></div>'
                   f'<div class="nota">{" ".join(notas)}</div>',
-                  fuente, d.get("muestra", False))
+                  fuente, fondo("granos"), "dato", d.get("muestra", False))
 
 
 def placa_tema(d, t, n, total):
@@ -203,13 +269,15 @@ def placa_tema(d, t, n, total):
             dato += f'<div class="dato-t">{e(t["dato_texto"])}</div>'
     importa = ""
     if t.get("importa"):
-        importa = (f'<div class="abajo card imp"><div class="imp-t">Para el productor de la zona</div>'
+        importa = (f'<div class="abajo card barra imp"><div class="imp-t">Para el productor de la zona</div>'
                    f'<div class="imp-b">{e(t["importa"])}</div></div>')
+    nombre = t.get("fondo") or FONDO_POR_ETIQUETA.get(sin_tildes(t["etiqueta"]), "campo")
     return pagina(n, total,
                   f'<div><span class="chip">{e(t["etiqueta"])}</span></div>{dato}'
                   f'<div class="t2{"" if dato else " solo"}">{e(t["titulo"])}</div><div class="b2">{e(t["bajada"])}</div>'
                   f'{importa}',
-                  f'Fuente: {e(t["fuente"])}, {e(dia_corto(t["fecha"], True))}.', d.get("muestra", False), full=True)
+                  f'Fuente: {e(t["fuente"])}, {e(dia_corto(t["fecha"], True))}.', fondo(nombre), "dato",
+                  d.get("muestra", False), full=True)
 
 
 def placa_cierre(d, n, total):
@@ -219,10 +287,10 @@ def placa_cierre(d, n, total):
               '<div class="fila"><b>Viernes</b><span>Resumen semanal</span></div></div>')
     return pagina(n, total,
                   f'<div class="eyebrow">Todas las semanas</div><div class="rule"></div>'
-                  f'<h1>La info del agro de la zona, en un solo lugar</h1>{agenda}'
+                  f'<h1>La info del agro de la zona,<br>en un solo lugar</h1>{agenda}'
                   f'<div class="abajo handle-xl">Seguinos en<br>@butassihnos</div>'
                   f'<div class="web" style="margin-top:14px">butassihnos.com.ar</div>',
-                  "", d.get("muestra", False), full=True, marca=False)
+                  "", fondo("cierre"), "cierre", d.get("muestra", False), full=True, marca=False)
 
 
 def validar(d):
@@ -286,7 +354,7 @@ def renderizar(paginas, salida):
         pg = b.new_page(viewport={"width": ANCHO, "height": ALTO}, device_scale_factor=1)
         for nombre, contenido in paginas:
             pg.set_content(contenido, wait_until="load")
-            pg.wait_for_timeout(150)
+            pg.wait_for_timeout(200)
             m = pg.evaluate(CHEQUEO)
             limite = m["pie"] - 24
             if m["desliza"] is not None:
@@ -308,8 +376,11 @@ if __name__ == "__main__":
     with open(archivo) as f:
         datos = json.load(f)
     validar(datos)
-    rutas, problemas = renderizar(placas(datos), salida)
+    paginas = placas(datos)
+    rutas, problemas = renderizar(paginas, salida)
     for r in rutas:
         print(r)
+    for a in dict.fromkeys(avisos):
+        print("AVISO:", a, file=sys.stderr)
     if problemas:
         sys.exit("PLACAS CON PROBLEMAS (no publicar):\n- " + "\n- ".join(problemas))
