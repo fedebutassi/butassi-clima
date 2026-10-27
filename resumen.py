@@ -1,7 +1,8 @@
 """Carrusel "La semana en el agro" para el feed de @butassihnos (1080x1350 PNG).
-Sigue el design system de Butassi Hnos.: Verde Campo #1C6617, Verde Cultivo #376B35, Cosecha #F0C031
-(acento, con moderación), texto Verde Profundo #173617, bordes #D9E0D9, foto cálida de campo con
-el lavado verde de marca, tarjetas blancas con borde y sombra verdosos, subrayado dorado.
+Sigue el design system de Butassi Hnos. para piezas sociales/pizarra: blanco sobre verde oscuro #1A4A1E,
+verde logo #2E7D32, dorado institucional #D4A017 solo en el subrayado (nunca en títulos ni precios),
+colores funcionales de la pizarra solo en la variación (▲ #4CAF50 · ▼ #E53935 · = #F5C518),
+foto cálida de campo con lavado verde, tarjetas blancas con borde #DCE5DC y sombra verdosa.
 
 Uso:
   python3 resumen.py resumen.json salida/resumen
@@ -25,10 +26,10 @@ resumen.json (lo arma la tarea del viernes con datos verificados en fuente prima
 Precio faltante: null -> "s/c" (sin cotización). La variación la calcula el script, nunca el JSON.
 Si un texto no entra en la placa, el script falla con el nombre del campo para acortarlo.
 
-Fondos: assets/fondos/<nombre>.jpg|jpeg|png|webp. Nombres que usa el script:
-  campo (tapa y respaldo de todo) · cierre · granos (precios) · siembra · cosecha · puerto ·
-  camiones · pulverizacion
-Si falta un fondo, usa campo.jpg y lo avisa por consola.
+Fondos: assets/fondos/<categoría>/*.jpg|jpeg|png|webp (ver assets/fondos/README.md).
+  campo (tapa y cierre, y respaldo) · granos (precios) · siembra · cosecha · puerto · camiones · pulverizacion
+Cada categoría puede tener varias fotos: rotan por semana y nunca se repite una foto en el mismo carrusel.
+Si una categoría está vacía, usa campo y lo avisa por consola.
 """
 import base64
 import html
@@ -103,99 +104,112 @@ def flecha(tipo):
 
 
 _cache = {}
+_usados = set()
+SEMANA = 0  # se fija en placas() con la semana ISO de "hasta"
 
 
-def fondo(nombre):
-    """data URI del fondo recortado a 1080x1350; si no existe, campo."""
-    if nombre in _cache:
-        return _cache[nombre]
-    ruta = None
-    for ext in ("jpg", "jpeg", "png", "webp"):
-        r = os.path.join(FONDOS_DIR, f"{nombre}.{ext}")
-        if os.path.exists(r):
-            ruta = r
-            break
-    if ruta is None:
-        if nombre != "campo":
-            avisos.append(f"no hay fondo '{nombre}' en assets/fondos/: usé campo")
-            _cache[nombre] = fondo("campo")
-            return _cache[nombre]
-        sys.exit("falta assets/fondos/campo.jpg (fondo de respaldo)")
+def _archivos(categoria):
+    carpeta = os.path.join(FONDOS_DIR, categoria)
+    if not os.path.isdir(carpeta):
+        return []
+    return sorted(os.path.join(carpeta, f) for f in os.listdir(carpeta)
+                  if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")))
+
+
+def elegir(categoria, ranura):
+    """Elige un fondo de la categoría que no se haya usado en este carrusel.
+    Rota por semana ISO: cada viernes cambia la foto, y la misma semana da siempre la misma."""
+    pool = _archivos(categoria)
+    if not pool:
+        avisos.append(f"no hay fondos en assets/fondos/{categoria}/: usé campo")
+        pool = _archivos("campo")
+    if not pool:
+        sys.exit("falta assets/fondos/campo/ (fondos de respaldo)")
+    libres = [f for f in pool if f not in _usados] or pool
+    ruta = libres[(SEMANA + ranura) % len(libres)]
+    _usados.add(ruta)
+    return fondo_uri(ruta)
+
+
+def fondo_uri(ruta):
+    """data URI del fondo recortado a 1080x1350."""
+    if ruta in _cache:
+        return _cache[ruta]
     im = ImageOps.exif_transpose(Image.open(ruta)).convert("RGB")
     if im.width < ANCHO * 0.6 or im.height < ALTO * 0.6:
-        avisos.append(f"el fondo '{nombre}' es chico ({im.width}x{im.height}): puede verse pixelado")
+        avisos.append(f"el fondo {os.path.basename(ruta)} es chico ({im.width}x{im.height}): puede verse pixelado")
     im = ImageOps.fit(im, (ANCHO, ALTO), Image.LANCZOS, centering=(0.5, 0.5))
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=84)
-    _cache[nombre] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-    return _cache[nombre]
+    _cache[ruta] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    return _cache[ruta]
 
 
 CSS = """
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:1080px;height:1350px}
 body{font-family:-apple-system,"SF Pro Display","Segoe UI",Roboto,Inter,system-ui,sans-serif;color:#fff;
-  background:#173617;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden}
+  background:#1A4A1E;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden}
 .bg{position:absolute;inset:0;background-size:cover;background-position:center}
 /* lavado verde de marca sobre la foto */
 .ov{position:absolute;inset:0}
-.ov.l-hero{background:linear-gradient(180deg,rgba(23,54,23,.82) 0%,rgba(28,102,23,.45) 50%,rgba(23,54,23,.30) 68%,rgba(23,54,23,.88) 100%)}
-.ov.l-cierre{background:linear-gradient(180deg,rgba(23,54,23,.85) 0%,rgba(23,54,23,.55) 45%,rgba(23,54,23,.80) 70%,rgba(23,54,23,.92) 100%)}
-.ov.l-dato{background:linear-gradient(180deg,rgba(23,54,23,.95) 0%,rgba(23,54,23,.88) 12%,rgba(23,54,23,.90) 50%,rgba(23,54,23,.94) 100%)}
+.ov.l-hero{background:linear-gradient(180deg,rgba(26,74,30,.82) 0%,rgba(46,125,50,.40) 50%,rgba(26,74,30,.30) 68%,rgba(26,74,30,.88) 100%)}
+.ov.l-cierre{background:linear-gradient(180deg,rgba(26,74,30,.85) 0%,rgba(26,74,30,.55) 45%,rgba(26,74,30,.80) 70%,rgba(26,74,30,.92) 100%)}
+.ov.l-dato{background:linear-gradient(180deg,rgba(26,74,30,.90) 0%,rgba(26,74,30,.78) 30%,rgba(26,74,30,.74) 60%,rgba(26,74,30,.90) 100%)}
 .wrap{position:absolute;left:80px;right:80px;top:72px}
 .wrap.full{bottom:210px;display:flex;flex-direction:column}
 .abajo{margin-top:auto !important}
 .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
 .logo{background:rgba(255,255,255,.95);border-radius:20px;padding:12px 22px;display:flex;
-  box-shadow:0 25px 50px -12px rgba(28,102,23,.30)}
+  box-shadow:0 25px 50px -12px rgba(52,99,29,.30)}
 .logo img{height:52px;display:block}
 .cont{font-size:26px;font-weight:600;color:rgba(255,255,255,.75);letter-spacing:.04em}
 .eyebrow{font-size:26px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.85)}
-.rule{width:96px;height:6px;border-radius:9999px;background:#F0C031;margin-top:22px}
+.rule{width:96px;height:6px;border-radius:9999px;background:#D4A017;margin-top:22px}
 h1{margin-top:26px;font-size:72px;line-height:1.08;font-weight:700;letter-spacing:-.01em}
 h1.xl{font-size:132px;line-height:1;margin-top:40px}
 .sub{margin-top:26px;font-size:34px;line-height:1.4;color:rgba(255,255,255,.9)}
 /* tarjeta blanca de marca */
-.card{margin-top:40px;background:#fff;color:#173617;border:2px solid #D9E0D9;border-radius:28px;
-  padding:10px 40px;box-shadow:0 20px 25px -5px rgba(28,102,23,.16),0 8px 10px -6px rgba(28,102,23,.10)}
+.card{margin-top:40px;background:#fff;color:#1A4A1E;border:2px solid #DCE5DC;border-radius:28px;
+  padding:10px 40px;box-shadow:0 20px 25px -5px rgba(52,99,29,.16),0 8px 10px -6px rgba(52,99,29,.10)}
 .card.barra{position:relative;overflow:hidden;padding-top:42px}
 .card.barra:before{content:"";position:absolute;left:0;right:0;top:0;height:10px;
-  background:linear-gradient(135deg,#F0C031,#F4CE5B)}
+  background:linear-gradient(135deg,#4CAF50,#2E7D32)}
 .temas{display:flex;flex-wrap:wrap;gap:16px}
 .temas-t{font-size:24px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:18px}
-.pill{padding:14px 28px;border-radius:9999px;background:rgba(255,255,255,.95);color:#1C6617;font-size:28px;font-weight:600}
-.desliza{position:absolute;right:80px;bottom:72px;font-size:30px;font-weight:700;color:#F0C031;display:flex;gap:12px;align-items:center}
+.pill{padding:14px 28px;border-radius:9999px;background:rgba(255,255,255,.95);color:#2E7D32;font-size:28px;font-weight:600}
+.desliza{position:absolute;right:80px;bottom:72px;font-size:30px;font-weight:700;color:#fff;display:flex;gap:12px;align-items:center}
 /* precios */
 .tabla{width:100%;border-collapse:collapse}
 .tabla th{font-size:22px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#687068;text-align:right;padding:26px 0 16px}
 .tabla th:first-child{text-align:left}
-.tabla td{padding:22px 0;border-top:2px solid #D9E0D9;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.tabla td.g{text-align:left;font-size:36px;font-weight:700;color:#173617}
+.tabla td{padding:22px 0;border-top:2px solid #DCE5DC;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabla td.g{text-align:left;font-size:36px;font-weight:700;color:#1A4A1E}
 .tabla td.ini{font-size:29px;color:#687068;padding-right:8px}
-.tabla td.fin{font-size:36px;font-weight:700;padding-left:22px;color:#173617}
+.tabla td.fin{font-size:36px;font-weight:700;padding-left:22px;color:#1A4A1E}
 .var{display:inline-flex;align-items:center;gap:8px;font-size:27px;font-weight:700;padding:9px 18px 9px 14px;border-radius:9999px}
-.var.sube{background:rgba(28,102,23,.11);color:#1C6617;fill:#1C6617}
-.var.baja{background:rgba(185,28,28,.10);color:#B91C1C;fill:#B91C1C}
-.var.igual{background:#F0C031;color:#173617;fill:#173617}
+.var.sube{background:#4CAF50;color:#1A4A1E;fill:#1A4A1E}
+.var.baja{background:#E53935;color:#fff;fill:#fff}
+.var.igual{background:#F5C518;color:#1A4A1E;fill:#1A4A1E}
 .fl{width:28px;height:28px;flex:none}
 .sc{color:#687068;font-weight:500}
 .nota{margin-top:18px;font-size:23px;color:rgba(255,255,255,.8)}
 /* tema */
-.chip{display:inline-block;padding:12px 26px;border-radius:9999px;background:#F0C031;color:#173617;font-size:25px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-.dato{margin-top:40px;font-size:150px;line-height:.95;font-weight:700;letter-spacing:-.02em;color:#F0C031}
+.chip{display:inline-block;padding:12px 26px;border-radius:9999px;background:#fff;color:#2E7D32;font-size:25px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.dato{margin-top:40px;font-size:150px;line-height:.95;font-weight:700;letter-spacing:-.02em;color:#fff}
 .dato-t{margin-top:14px;font-size:34px;font-weight:600;color:rgba(255,255,255,.92)}
 .t2{margin-top:44px;font-size:56px;line-height:1.12;font-weight:700;letter-spacing:-.01em}
 .t2.solo{font-size:66px;margin-top:40px}
 .b2{margin-top:24px;font-size:33px;line-height:1.45;color:rgba(255,255,255,.9)}
 .imp{padding-bottom:34px}
-.imp-t{font-size:22px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1C6617}
-.imp-b{margin-top:12px;font-size:31px;line-height:1.42;font-weight:500;color:#173617}
+.imp-t{font-size:22px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#2E7D32}
+.imp-b{margin-top:12px;font-size:31px;line-height:1.42;font-weight:500;color:#1A4A1E}
 /* cierre */
-.handle-xl{font-size:76px;font-weight:700;letter-spacing:-.01em;color:#F0C031;line-height:1.08}
-.agenda .fila{display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-top:2px solid #D9E0D9;font-size:34px}
+.handle-xl{font-size:76px;font-weight:700;letter-spacing:-.01em;color:#fff;line-height:1.08}
+.agenda .fila{display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-top:2px solid #DCE5DC;font-size:34px}
 .agenda .fila:first-child{border-top:0}
-.agenda .fila b{font-weight:700;color:#173617}
-.agenda .fila span{color:#1C6617;font-size:31px;font-weight:600}
+.agenda .fila b{font-weight:700;color:#1A4A1E}
+.agenda .fila span{color:#2E7D32;font-size:31px;font-weight:600}
 /* pie */
 .pie{position:absolute;left:80px;right:80px;bottom:64px}
 .fuente{font-size:22px;line-height:1.45;color:rgba(255,255,255,.78);padding-bottom:22px;margin-bottom:22px;border-bottom:1.5px solid rgba(255,255,255,.22)}
@@ -229,7 +243,7 @@ def placa_tapa(d, total):
                   f'<div class="rule"></div><h1 class="xl">La semana<br>en el agro</h1>'
                   f'<div class="sub">Lo que pasó en el mercado y en el campo,<br>contado simple.</div>'
                   f'<div class="abajo"><div class="temas-t">En este resumen</div><div class="temas">{pills}</div></div>',
-                  "", fondo("campo"), "hero", d.get("muestra", False), extra=desliza, full=True)
+                  "", elegir("campo", 0), "hero", d.get("muestra", False), extra=desliza, full=True)
 
 
 def placa_precios(d, n, total):
@@ -258,7 +272,7 @@ def placa_precios(d, n, total):
                   f'<div class="card"><table class="tabla"><tr><th>Grano</th><th>{e(dia_corto(p["fecha_inicio"]))}</th>'
                   f'<th>{e(dia_corto(p["fecha_cierre"]))}</th><th>Variación</th></tr>{filas}</table></div>'
                   f'<div class="nota">{" ".join(notas)}</div>',
-                  fuente, fondo("granos"), "dato", d.get("muestra", False))
+                  fuente, elegir("granos", 1), "dato", d.get("muestra", False))
 
 
 def placa_tema(d, t, n, total):
@@ -272,11 +286,12 @@ def placa_tema(d, t, n, total):
         importa = (f'<div class="abajo card barra imp"><div class="imp-t">Para el productor de la zona</div>'
                    f'<div class="imp-b">{e(t["importa"])}</div></div>')
     nombre = t.get("fondo") or FONDO_POR_ETIQUETA.get(sin_tildes(t["etiqueta"]), "campo")
+    bg = elegir(nombre, n)
     return pagina(n, total,
                   f'<div><span class="chip">{e(t["etiqueta"])}</span></div>{dato}'
                   f'<div class="t2{"" if dato else " solo"}">{e(t["titulo"])}</div><div class="b2">{e(t["bajada"])}</div>'
                   f'{importa}',
-                  f'Fuente: {e(t["fuente"])}, {e(dia_corto(t["fecha"], True))}.', fondo(nombre), "dato",
+                  f'Fuente: {e(t["fuente"])}, {e(dia_corto(t["fecha"], True))}.', bg, "dato",
                   d.get("muestra", False), full=True)
 
 
@@ -290,7 +305,7 @@ def placa_cierre(d, n, total):
                   f'<h1>La info del agro de la zona,<br>en un solo lugar</h1>{agenda}'
                   f'<div class="abajo handle-xl">Seguinos en<br>@butassihnos</div>'
                   f'<div class="web" style="margin-top:14px">butassihnos.com.ar</div>',
-                  "", fondo("cierre"), "cierre", d.get("muestra", False), full=True, marca=False)
+                  "", elegir("campo", 7), "cierre", d.get("muestra", False), full=True, marca=False)
 
 
 def validar(d):
@@ -322,6 +337,9 @@ def validar(d):
 
 
 def placas(d):
+    global SEMANA
+    SEMANA = date.fromisoformat(d["hasta"]).isocalendar()[1]
+    _usados.clear()
     temas = d.get("temas", [])
     total = 3 + len(temas)
     out = [("1-tapa.png", placa_tapa(d, total)), ("2-precios.png", placa_precios(d, 2, total))]
