@@ -1,0 +1,11 @@
+{
+  "valores": "2026-10-26",
+  "publicacion": "2026-10-27",
+  "granos": [
+    {"grano": "Soja", "precio": 555000, "tendencia": "igual"},
+    {"grano": "Maíz", "precio": 281000, "tendencia": "sube"},
+    {"grano": "Girasol", "precio": 811960, "tendencia": "sube", "estimativo": true},
+    {"grano": "Trigo", "precio": 326000, "tendencia": "baja"},
+    {"grano": "Sorgo", "precio": 291100, "tendencia": "sube"}
+  ]
+}

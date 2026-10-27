@@ -23,6 +23,14 @@ Es salida de modelo numérico: sin probabilidades ni "tormenta"; las piezas lo d
 Niveles: 3 amarilla · 4 naranja · ≥5 roja. Eventos según el catálogo del propio SMN (41 tormentas, 37 lluvias, 39 viento…).
 La descripción solo usa datos del texto oficial (mm, ráfagas, granizo).
 
+## Pizarra diaria (story 1080×1920)
+```
+python3 pizarra.py pizarra.json            # -> salida/pizarra/pizarra-AAAA-MM-DD.png
+```
+Mismo diseño que la pizarra de siempre, logo más chico y @butassihnos junto a la web, todo dentro
+de la zona segura de stories. Formato del JSON arriba de `pizarra.py`; ejemplo en
+`tests/pizarra_2026-10-26.json`. Íconos y logo en `assets/pizarra/`, fuente Open Sans (OFL) en `assets/fonts/`.
+
 ## Resumen semanal (carrusel de feed, viernes)
 ```
 ./resumen.sh resumen.json   # -> salida/resumen/1-tapa.png, 2-precios.png, 3..-tema.png, N-cierre.png
