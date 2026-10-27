@@ -23,6 +23,16 @@ Es salida de modelo numérico: sin probabilidades ni "tormenta"; las piezas lo d
 Niveles: 3 amarilla · 4 naranja · ≥5 roja. Eventos según el catálogo del propio SMN (41 tormentas, 37 lluvias, 39 viento…).
 La descripción solo usa datos del texto oficial (mm, ráfagas, granizo).
 
+## Resumen semanal (carrusel de feed, viernes)
+```
+./resumen.sh resumen.json   # -> salida/resumen/1-tapa.png, 2-precios.png, 3..-tema.png, N-cierre.png
+```
+Placas 1080×1350 (4:5): tapa, pizarra de Rosario lunes vs. viernes, 0 a 2 temas y cierre.
+`resumen.json` lo arma la tarea programada del viernes con datos verificados en fuente primaria;
+el formato está documentado arriba de `resumen.py`. La variación de precios la calcula el script.
+Si un texto es demasiado largo o no entra en la placa, el script termina con error y dice qué acortar.
+Para probar: `./resumen.sh tests/resumen_muestra.json` (sale marcada "MUESTRA · NO PUBLICAR").
+
 ## Archivos
 - `parse_smn.py` resumen diario del pron5d · `alertas.py` alertas → datos de story · `render.py` plantillas y PNG
 - `mapa.py` mapa de departamentos (geometrías IGN en `assets/`) · `assets/logo.png` logo · `assets/icons/` Lucide (ISC)

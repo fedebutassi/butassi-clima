@@ -1,0 +1,62 @@
+{
+  "desde": "2026-10-26",
+  "hasta": "2026-10-30",
+  "muestra": true,
+  "precios": {
+    "fecha_inicio": "2026-10-26",
+    "fecha_cierre": "2026-10-30",
+    "fuente": "Cámara Arbitral de Cereales de Rosario",
+    "granos": [
+      {
+        "grano": "Soja",
+        "inicio": 507000,
+        "cierre": 514500,
+        "estimativo": false
+      },
+      {
+        "grano": "Maíz",
+        "inicio": 267050,
+        "cierre": 262300,
+        "estimativo": false
+      },
+      {
+        "grano": "Girasol",
+        "inicio": 771160,
+        "cierre": 771160,
+        "estimativo": true
+      },
+      {
+        "grano": "Trigo",
+        "inicio": 326260,
+        "cierre": 329000,
+        "estimativo": false
+      },
+      {
+        "grano": "Sorgo",
+        "inicio": 277321,
+        "cierre": null,
+        "estimativo": false
+      }
+    ]
+  },
+  "temas": [
+    {
+      "etiqueta": "Campaña",
+      "dato": "38 %",
+      "dato_texto": "del maíz temprano ya sembrado en Córdoba",
+      "titulo": "La siembra de maíz avanza a buen ritmo en la provincia",
+      "bajada": "Las lluvias de la semana pasada dejaron humedad en los lotes y aceleraron la siembra en el centro de Córdoba.",
+      "fuente": "Bolsa de Cereales de Córdoba",
+      "fecha": "2026-10-29",
+      "importa": "Con humedad en el perfil, los lotes de la zona que todavía no se sembraron tienen buenas condiciones para arrancar."
+    },
+    {
+      "etiqueta": "Exportaciones",
+      "titulo": "Los puertos del Gran Rosario cargaron más soja que el año pasado",
+      "bajada": "Más barcos cargando significa más demanda por el grano argentino, y eso ayuda a sostener el precio que se paga en la zona.",
+      "fuente": "Bolsa de Comercio de Rosario",
+      "fecha": "2026-10-28",
+      "importa": "Una demanda firme en los puertos sostiene el precio que llega a Río Tercero y alrededores."
+    }
+  ]
+}
