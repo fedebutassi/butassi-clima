@@ -17,8 +17,10 @@ pizarra.json:
     {"grano": "Sorgo",   "precio": 291100, "anterior": 290000}
   ]
 }
-"tendencia" es sube | baja | igual. En lugar de "tendencia" se puede pasar "anterior" (precio del día
-hábil previo) y el script la calcula. Precio null -> "s/c" sin flecha.
+"tendencia" es sube | baja | igual. Si no se pasa, el script la calcula: con "anterior" (precio del día
+previo) o, si tampoco está, con el último día guardado en pizarras/historial.json. Cada pizarra
+generada se agrega al historial (commitealo para que el día siguiente compare bien).
+Precio null -> "s/c" sin flecha.
 Granos con ícono: soja, maíz, girasol, trigo, sorgo.
 """
 import base64
@@ -36,6 +38,36 @@ ASSETS = os.path.join(AQUI, "assets", "pizarra")
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
          "septiembre", "octubre", "noviembre", "diciembre"]
 ANCHO, ALTO = 1080, 1920
+HISTORIAL = os.path.join(AQUI, "pizarras", "historial.json")
+
+
+def leer_historial():
+    try:
+        with open(HISTORIAL) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def completar_anteriores(d, hist):
+    """Si un grano no trae tendencia ni anterior, la saca del último día previo guardado en el historial."""
+    previos = sorted(k for k in hist if k < d["valores"])
+    for g in d["granos"]:
+        if g.get("tendencia") or g.get("anterior") is not None or g.get("precio") is None:
+            continue
+        for dia in reversed(previos):
+            v = hist[dia].get(clave(g["grano"]))
+            if v is not None:
+                g["anterior"] = v
+                g["_dia_anterior"] = dia
+                break
+
+
+def guardar_historial(d, hist):
+    hist[d["valores"]] = {clave(g["grano"]): g.get("precio") for g in d["granos"]}
+    os.makedirs(os.path.dirname(HISTORIAL), exist_ok=True)
+    with open(HISTORIAL, "w") as f:
+        json.dump(dict(sorted(hist.items())), f, ensure_ascii=False, indent=1)
 
 
 def b64(ruta, mime):
@@ -67,7 +99,7 @@ def tendencia(g):
         return t
     if g.get("anterior") is not None:
         return "sube" if g["precio"] > g["anterior"] else "baja" if g["precio"] < g["anterior"] else "igual"
-    sys.exit(f"falta 'tendencia' o 'anterior' en {g['grano']}")
+    sys.exit(f"falta 'tendencia' o 'anterior' en {g['grano']} (y no hay un día previo en {HISTORIAL})")
 
 
 FLECHAS = {
@@ -162,5 +194,11 @@ if __name__ == "__main__":
         datos = json.load(f)
     salida = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
         AQUI, "salida", "pizarra", f"pizarra-{datos['valores']}.png")
+    hist = leer_historial()
+    completar_anteriores(datos, hist)
     renderizar(armar(datos), salida)
+    guardar_historial(datos, hist)
+    for g in datos["granos"]:
+        if g.get("_dia_anterior"):
+            print(f"{g['grano']}: comparado con {g['_dia_anterior']} ({tendencia(g)})", file=sys.stderr)
     print(salida)
