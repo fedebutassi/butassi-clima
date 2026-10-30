@@ -64,7 +64,11 @@ def completar_anteriores(d, hist):
 
 
 def guardar_historial(d, hist):
-    hist[d["valores"]] = {clave(g["grano"]): g.get("precio") for g in d["granos"]}
+    dia = {clave(g["grano"]): g.get("precio") for g in d["granos"]}
+    est = [clave(g["grano"]) for g in d["granos"] if g.get("estimativo")]
+    if est:
+        dia["estimativos"] = est
+    hist[d["valores"]] = dia
     os.makedirs(os.path.dirname(HISTORIAL), exist_ok=True)
     with open(HISTORIAL, "w") as f:
         json.dump(dict(sorted(hist.items())), f, ensure_ascii=False, indent=1)

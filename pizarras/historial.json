@@ -4,34 +4,52 @@
   "maiz": 278250,
   "girasol": 805860,
   "trigo": 326900,
-  "sorgo": 288900
+  "sorgo": 288900,
+  "estimativos": [
+   "girasol"
+  ]
  },
  "2026-10-26": {
   "soja": 555000,
   "maiz": 281000,
   "girasol": 811960,
   "trigo": 326000,
-  "sorgo": 291100
+  "sorgo": 291100,
+  "estimativos": [
+   "girasol"
+  ]
  },
  "2026-10-27": {
   "soja": 550000,
   "maiz": 280500,
   "girasol": 810370,
   "trigo": 323000,
-  "sorgo": 285900
+  "sorgo": 285900,
+  "estimativos": [
+   "girasol"
+  ]
  },
  "2026-10-28": {
   "soja": 550000,
   "maiz": 277800,
   "girasol": 812490,
   "trigo": 317300,
-  "sorgo": 285900
+  "sorgo": 285900,
+  "estimativos": [
+   "girasol",
+   "sorgo"
+  ]
  },
  "2026-10-29": {
   "soja": 547000,
   "maiz": 275400,
   "girasol": 810900,
   "trigo": 311000,
-  "sorgo": 285000
+  "sorgo": 285000,
+  "estimativos": [
+   "soja",
+   "girasol",
+   "sorgo"
+  ]
  }
 }
