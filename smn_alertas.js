@@ -7,6 +7,8 @@
 const AREAS = [803,804,805,806,807,808,809,810,811,812,813,814,815,816];
 const EVENTOS = [41,37,42,39,47,40,46,54,45];   // orden de filas de la tabla del SMN
 const ENC = {"tormenta":41,"lluvia":37,"nevada":42,"viento":39,"viento zonda":47,"niebla":40,"polvo":46,"humo":54,"ceniza volcánica":45};
+const FOCO = [803, 808, 811];   // áreas con Tercero Arriba, Río Segundo y Calamuchita: si falla una, error
+const BLANCO = "rgb(255, 255, 255)";   // celda sin dato (p. ej. franjas ya pasadas de hoy)
 const COLOR = {"rgb(53, 199, 149)":1,"rgb(139, 134, 196)":2,"rgb(255, 211, 87)":3,"rgb(244, 149, 61)":4,"rgb(219, 84, 97)":5};
 const NIVEL_TXT = {"Amarillo":3,"Naranja":4,"Rojo":5};
 const FR = ["early_morning","morning","afternoon","night"];
@@ -32,7 +34,9 @@ function leerArea(doc) {
     const events = filas.map((tr, i) => {
       const levels = {};
       [...tr.querySelectorAll("td")].forEach((td, k) => {
-        levels[FR[k]] = COLOR[td.style.backgroundColor] ?? null;
+        const c = td.style.backgroundColor;
+        if (c && c !== BLANCO && !(c in COLOR)) throw new Error("color desconocido en la tabla: " + c);
+        levels[FR[k]] = COLOR[c] ?? null;
       });
       return {id: EVENTOS[i], max_level: Math.max(0, ...Object.values(levels).filter(v => v)), levels};
     });
@@ -86,4 +90,6 @@ const out = {};
 for (const id of AREAS) out[id] = await cargar(id);
 const malas = AREAS.filter(id => out[id].error);
 if (malas.length === AREAS.length) throw new Error("no pude leer ninguna área: " + out[AREAS[0]].error);
+const focoMal = FOCO.filter(id => out[id].error);
+if (focoMal.length) throw new Error("no pude leer áreas de la zona foco " + focoMal.map(id => id + " (" + out[id].error + ")").join(", "));
 JSON.stringify(out)
