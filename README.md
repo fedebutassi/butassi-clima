@@ -20,6 +20,8 @@ Es salida de modelo numérico: sin probabilidades ni "tormenta"; las piezas lo d
 2. Guardar el resultado como `alertas_raw.json`.
 3. `./alerta.sh alertas_raw.json AAAA-MM-DD` → una story por alerta de hoy/mañana que toque la zona foco.
 
+smn_alertas.js no usa token: lee las páginas públicas de cada área (tarda hasta ~30 s).
+
 Niveles: 3 amarilla · 4 naranja · ≥5 roja. Eventos según el catálogo del propio SMN (41 tormentas, 37 lluvias, 39 viento…).
 La descripción solo usa datos del texto oficial (mm, ráfagas, granizo).
 
