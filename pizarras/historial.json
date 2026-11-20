@@ -175,5 +175,16 @@
    "girasol",
    "sorgo"
   ]
+ },
+ "2026-11-19": {
+  "soja": 550000,
+  "maiz": 272000,
+  "girasol": 746880,
+  "trigo": 294084,
+  "sorgo": 287860,
+  "estimativos": [
+   "girasol",
+   "sorgo"
+  ]
  }
 }
